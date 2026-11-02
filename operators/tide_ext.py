@@ -81,8 +81,41 @@ class TideStationExtension:
             for pattern in patterns:
                 if re.search(pattern, p.name, re.I):
                     with np.load(p, allow_pickle=True) as f:
-                        return {
-                            "ssh_diff": f.get('ssh_diff', np.array([])),
-                            "ssh_aux": f.get('ssh_aux', np.array([])),
-                        }
+                        # GPF 04-MATCH 输出格式：match_records 数组（字典）
+                        if 'match_records' in f:
+                            records = f['match_records']
+                            ssh_sat_vals = []
+                            ssh_ycz_vals = []
+                            
+                            for rec in records:
+                                if not isinstance(rec, dict):
+                                    continue
+                                sshalt = rec.get('sshalt', None)
+                                tide001 = rec.get('tide001', None)
+                                
+                                if sshalt is not None and tide001 is not None:
+                                    # sshalt 可能是 MaskedArray 或 ndarray
+                                    if hasattr(sshalt, 'compressed'):
+                                        # MaskedArray: 只取有效值
+                                        valid_sshalt = sshalt.compressed()
+                                    else:
+                                        valid_sshalt = np.asarray(sshalt)
+                                    
+                                    # 对每个有效的卫星 SSH 点，配对同一个验潮站值
+                                    for ssh_val in valid_sshalt:
+                                        if not np.isnan(ssh_val):
+                                            ssh_sat_vals.append(float(ssh_val))
+                                            ssh_ycz_vals.append(float(tide001))
+                            
+                            if len(ssh_sat_vals) > 0:
+                                return {
+                                    "ssh_diff": np.array(ssh_sat_vals),
+                                    "ssh_aux": np.array(ssh_ycz_vals),
+                                }
+                        # 兼容旧格式
+                        elif 'ssh_diff' in f or 'ssh_aux' in f:
+                            return {
+                                "ssh_diff": f.get('ssh_diff', np.array([])),
+                                "ssh_aux": f.get('ssh_aux', np.array([])),
+                            }
         return None

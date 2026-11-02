@@ -110,9 +110,12 @@ def data_health_check_node(state: AgentState) -> AgentState:
 
 
 def method_recommendation_node(state: AgentState) -> AgentState:
-    """方法推荐节点 - 基于数据和诊断结果推荐最佳定标方法"""
+    """方法推荐节点 - 使用 LLM 智能分析数据特征并推荐最佳定标方法"""
+    from .llm_client import LLMClient
+    
     parsed = state.get("parsed_task", {})
     health = state.get("health_report", {})
+    available_datasets = state.get("available_datasets", [])
     
     if not parsed:
         return {
@@ -123,53 +126,120 @@ def method_recommendation_node(state: AgentState) -> AgentState:
     # 获取诊断结果
     health_status = health.get("status", "unknown")
     
-    # 如果数据不健康，阻止执行
+    # 如果数据不健康，直接阻断（快速响应，不调用 LLM）
     if health_status in ("critical", "degraded"):
         return {
             "recommendation": {
                 "action": "abort",
                 "reason": f"数据质量不佳 ({health_status})",
-                "suggestion": health.get("recommendations", ["请检查数据完整性"])
+                "confidence": "high",
+                "reasoning": health.get("recommendations", ["请检查数据完整性"]),
+                "alternative_methods": []
             },
             "branch_path": "abort_data_quality",
             "logs": state["logs"] + [{"event": "recommendation_abort", "reason": health_status}],
         }
     
-    # 基于任务类型和数据特征推荐
-    method = parsed.get("method")
-    available_count = len(state.get("available_datasets", []))
-    
-    recommendation = {
-        "action": "proceed",
-        "method": method,
-        "confidence": "high" if available_count > 5 else "medium" if available_count > 0 else "low",
-        "reasoning": [],
-        "alternative_methods": []
+    # 准备 LLM 上下文
+    task_info = {
+        "primary_satellite": parsed.get("primary_sat"),
+        "auxiliary_data": parsed.get("aux_data_type"),
+        "requested_method": parsed.get("method"),
+        "start_date": parsed.get("start_date"),
+        "end_date": parsed.get("end_date"),
     }
     
-    # 生成推荐理由
-    if method == "star_cross":
-        recommendation["reasoning"].append(f"星间交叉定标适合检测卫星间系统性偏差")
-        if available_count < 2:
-            recommendation["alternative_methods"].append({
-                "method": "self_cross",
-                "reason": "数据量不足，可考虑先做自交叉"
-            })
-    elif method == "self_cross":
-        recommendation["reasoning"].append("自交叉适合监测单星漂移")
-        recommendation["alternative_methods"].append({
-            "method": "star_cross", 
-            "reason": "如需更高精度，建议收集多星数据后做星间交叉"
+    # 构建可用数据集摘要
+    dataset_summary = []
+    for ds in available_datasets:
+        dataset_summary.append({
+            "path": ds.get("path"),
+            "format": ds.get("format"),
+            "size_mb": ds.get("size_mb"),
+            "record_count": ds.get("record_count"),
+            "time_range": ds.get("time_range"),
         })
-    elif method == "tide_ext":
-        recommendation["reasoning"].append("验潮站参考提供绝对基准")
     
-    # 添加通用建议
-    recommendation["reasoning"].append(f"已找到 {available_count} 个可用数据集")
+    # 组装完整上下文
+    context = {
+        **task_info,
+        "available_datasets": dataset_summary,
+        "data_health_status": health_status,
+        "health_details": health.get("details", {}),
+        "total_samples": len(dataset_summary),
+    }
+    
+    # 调用 LLM 生成智能推荐
+    try:
+        llm = LLMClient()
+        recommendation_text = llm.generate_recommendation(context)
+        
+        # 解析 LLM 回复为结构化数据（简化版，实际应该用正则提取）
+        # 这里假设 LLM 会按特定格式回复，我们做基本解析
+        recommendation = {
+            "action": "proceed",  # 默认允许继续
+            "method": parsed.get("method"),
+            "confidence": "medium",
+            "reasoning": [recommendation_text],  # 保留完整回复作为推理依据
+            "alternative_methods": [],
+            "llm_analysis": recommendation_text,
+            "risk_factors": [],
+            "warnings": []
+        }
+        
+        # 简单解析 LLM 回复中的关键词
+        text_lower = recommendation_text.lower()
+        
+        if "data不足" in text_lower or "insufficient" in text_lower:
+            recommendation["confidence"] = "low"
+            if parsed.get("method") == "star_cross":
+                recommendation["alternative_methods"].append({
+                    "method": "self_cross",
+                    "reason": "数据量不足，建议先用自交叉验证单星稳定性"
+                })
+        
+        if "建议改用" in text_lower or "consider" in text_lower:
+            # 提取建议的方法
+            if "自交叉" in text_lower or "self-cross" in text_lower:
+                recommendation["alternative_methods"].append({
+                    "method": "self_cross",
+                    "reason": "LLM 建议改用自交叉方法"
+                })
+            elif "星间交叉" in text_lower or "cross-calibration" in text_lower:
+                recommendation["alternative_methods"].append({
+                    "method": "star_cross",
+                    "reason": "LLM 建议改用星间交叉方法"
+                })
+        
+        if "高风险" in text_lower or "warning" in text_lower or "caution" in text_lower:
+            recommendation["warnings"].append("LLM 指出存在潜在风险，建议仔细评估")
+            
+        if "不建议" in text_lower or "not recommended" in text_lower:
+            recommendation["action"] = "review"
+            
+    except Exception as e:
+        # LLM 调用失败时的降级策略：回退到简单规则
+        recommendation = {
+            "action": "proceed",
+            "method": parsed.get("method"),
+            "confidence": "low",
+            "reasoning": [f"LLM 调用失败，使用基础规则 (错误：{str(e)[:100]})"],
+            "alternative_methods": [],
+            "fallback_used": True,
+            "warnings": ["未启用 LLM 智能推荐，请自行评估"]
+        }
+    
+    # 确定分支路径
+    if len(available_datasets) == 0:
+        branch_path = "abort_no_data"
+        recommendation["action"] = "abort"
+        recommendation["reasoning"].append("无可用数据集，无法执行定标")
+    else:
+        branch_path = "execute"
     
     return {
         "recommendation": recommendation,
-        "branch_path": "execute" if available_count > 0 else "abort_no_data",
+        "branch_path": branch_path,
         "logs": state["logs"] + [{"event": "recommendation_generated", "action": recommendation["action"]}],
     }
 
