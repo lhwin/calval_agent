@@ -2,10 +2,6 @@
 8 个 GPF 算子包装器统一导出。
 
 分组:
-- 01 星星交叉 (SSH/本地): star_cross_match, star_cross_cal
-- 02 星星自交叉 (SSH/本地): self_cross_match, self_cross_cal
-- 03 SIG0 交叉 (SSH): sig0_cross_match, sig0_cross_cal
-- 04 验潮站 (SSH/本地): ycz_match, ycz_cal
 
 原有本地算子保持向后兼容:
 - tide_ext, tide_ext_full, star_cross, self_cross

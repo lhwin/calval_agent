@@ -1,6 +1,5 @@
 """
 01 星星交叉 - MATCH 算子包装器
-输入：两颗卫星的 NC 数据 (via SSHExecutor 或直接本地)
 输出：NPZ 匹配文件 (match_result_*.npz)
 """
 
@@ -67,7 +66,6 @@ class StarCrossMatchOperator(BaseOperator):
         <Processing_Parameter><Name>Sat_ID</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
         <Processing_Parameter><Name>Data_version</Name><Value>{self.config.data_version.lstrip('V')}</Value></Processing_Parameter>
         <Processing_Parameter><Name>AUX_Sat</Name><Value>{self.config.aux_data_type}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>Product_Type</Name><Value>SSH</Value></Processing_Parameter>
         <Processing_Parameter><Name>Start_date</Name><Value>{self.config.start_date}</Value></Processing_Parameter>
         <Processing_Parameter><Name>End_date</Name><Value>{self.config.end_date}</Value></Processing_Parameter>
     </Processing_Parameters>
@@ -113,12 +111,8 @@ class StarCrossMatchOperator(BaseOperator):
             if str(src_dir) in sys.path:
                 sys.path.remove(str(src_dir))
     
-    def run_ssh(self, ssh_client) -> Dict[str, Any]:
-        """通过 SSH 执行远程 MATCH"""
         from data_adapter.xml_generator import generate_star_cross_match_xml
-        from data_adapter.ssh_executor import SSHExecutor
         
-        executor = SSHExecutor()
         
         # 1. 生成 XML 工单
         xml_content = generate_star_cross_match_xml(

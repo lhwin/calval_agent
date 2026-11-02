@@ -54,8 +54,6 @@ class YczCalOperator(BaseOperator):
         <Dynamic_Processing_Parameters count="9">
             <Processing_Parameter><Name>Sat_ID</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
             <Processing_Parameter><Name>Data_version</Name><Value>{self.config.data_version.lstrip('V')}</Value></Processing_Parameter>
-            <Processing_Parameter><Name>Match_Data_Type</Name><Value>GL_SSH_YCZ_MATCH_RESULT</Value></Processing_Parameter>
-            <Processing_Parameter><Name>Product_Type</Name><Value>SSH</Value></Processing_Parameter>
             <Processing_Parameter><Name>Start_date</Name><Value>{self.config.start_date}</Value></Processing_Parameter>
             <Processing_Parameter><Name>End_date</Name><Value>{self.config.end_date}</Value></Processing_Parameter>
             <Processing_Parameter><Name>Template_docx</Name><Value>{self.config.template_docx or "./data/input/MCS_GL_ALT_YCZ.docx"}</Value></Processing_Parameter>
@@ -70,7 +68,6 @@ class YczCalOperator(BaseOperator):
             <Task_Version>1.0</Task_Version>
             <List_of_Inputs count="2">
                 <Input>
-                    <File_Type>GL_SSH_YCZ_MATCH_RESULT</File_Type>
                     <File_Name_Type>Directory</File_Name_Type>
                     <List_of_File_Names count="1"><File_Name>{local_input_dir}</File_Name></List_of_File_Names>
                 </Input>
@@ -82,7 +79,6 @@ class YczCalOperator(BaseOperator):
             </List_of_Inputs>
             <List_of_Outputs count="1">
                 <Output>
-                    <File_Type>GL_SSH_YCZ_CAL_RESULT</File_Type>
                     <File_Name_Type>Directory</File_Name_Type>
                     <File_Name>{self.config.output_dir or "./output"}</File_Name>
                 </Output>
@@ -103,7 +99,6 @@ class YczCalOperator(BaseOperator):
             
             # 04-CAL 的 IPFUtils 不解析 Match_Data_Type, 但 func 需要 - 手动补充
             ipf_config = MyIPFConfig(str(xml_file))
-            ipf_config.Match_Data_Type = "GL_SSH_YCZ_MATCH_RESULT"
             
             t0 = time.time()
             func(ipf_config)

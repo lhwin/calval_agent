@@ -67,7 +67,6 @@ class YczMatchOperator(BaseOperator):
             <Processing_Parameter><Name>Sat_ID</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
             <Processing_Parameter><Name>AUX_YCZ</Name><Value>{self.config.aux_ycz or "WS_YCZ"}</Value></Processing_Parameter>
             <Processing_Parameter><Name>Data_version</Name><Value>{self.config.data_version.lstrip('V')}</Value></Processing_Parameter>
-            <Processing_Parameter><Name>Product_Type</Name><Value>SSH</Value></Processing_Parameter>
             <Processing_Parameter><Name>Start_date</Name><Value>{self.config.start_date}</Value></Processing_Parameter>
             <Processing_Parameter><Name>End_date</Name><Value>{self.config.end_date}</Value></Processing_Parameter>
             <Processing_Parameter><Name>MSS_PATH</Name><Value>{self.config.mss_path or "./data/input/DTU18MSS_1min.nc"}</Value></Processing_Parameter>
@@ -92,7 +91,6 @@ class YczMatchOperator(BaseOperator):
             </List_of_Inputs>
             <List_of_Outputs count="1">
                 <Output>
-                    <File_Type>GL_SSH_YCZ_MATCH_RESULT</File_Type>
                     <File_Name_Type>Directory</File_Name_Type>
                     <File_Name>{self.config.output_dir or "./output"}</File_Name>
                 </Output>

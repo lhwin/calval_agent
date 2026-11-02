@@ -30,9 +30,6 @@ class SelfCrossCalOperator(BaseOperator):
         from .star_cross_cal import StarCrossCalOperator
         return StarCrossCalOperator(self.config).run_local(local_input_dir)
         
-    def run_ssh(self, ssh_client) -> Dict[str, Any]:
-        """通过 SSH 执行远程自交叉定标"""
-        from data_adapter.ssh_executor import SSHExecutor
         
         job_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Gpf_Job_Order>
@@ -68,7 +65,6 @@ class SelfCrossCalOperator(BaseOperator):
     </List_of_Gpf_Procs>
 </Gpf_Job_Order>'''
         
-        executor = SSHExecutor()
         result = executor.execute_xml_job(
             ssh_client=ssh_client,
             xml_content=job_xml,

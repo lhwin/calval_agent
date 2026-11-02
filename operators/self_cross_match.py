@@ -74,7 +74,6 @@ class SelfCrossMatchOperator(BaseOperator):
         <Processing_Parameter><Name>Sat_ID</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
         <Processing_Parameter><Name>Data_version</Name><Value>{self.config.data_version.lstrip('V')}</Value></Processing_Parameter>
         <Processing_Parameter><Name>AUX_Sat</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>Product_Type</Name><Value>SSH</Value></Processing_Parameter>
         <Processing_Parameter><Name>Start_date</Name><Value>{self.config.start_date}</Value></Processing_Parameter>
         <Processing_Parameter><Name>End_date</Name><Value>{self.config.end_date}</Value></Processing_Parameter>
     </Processing_Parameters>
@@ -117,8 +116,6 @@ class SelfCrossMatchOperator(BaseOperator):
             if str(src_dir) in sys.path:
                 sys.path.remove(str(src_dir))
     
-    def run_ssh(self, ssh_client) -> Dict[str, Any]:
-        """通过 SSH 执行远程自交叉匹配"""
         # TODO: 需要专门生成自交叉的 XML (Sat_ID 和 AUX_Sat 相同)
         from data_adapter.xml_generator import GPFJobOrder
         
@@ -137,8 +134,6 @@ class SelfCrossMatchOperator(BaseOperator):
             output_dir=self.config.output_dir or "./output",
         )
         
-        from data_adapter.ssh_executor import SSHExecutor
-        executor = SSHExecutor()
         
         remote_job_path = f"/tmp/job_self_{self.config.sat_id}_{self.config.start_date}.xml"
         result = executor.execute_xml_job(

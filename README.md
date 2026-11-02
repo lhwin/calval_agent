@@ -345,14 +345,11 @@ op = StarCrossMatchOperator(cfg)
 # 本地执行
 result = op.run_local(cfg.input_dir)
 
-# SSH 远程执行
-from data_adapter.ssh_executor import SSHExecutor
-ssh = SSHExecutor(host="192.168.240.132", username="leehir", key_path="~/.ssh/id_ed25519")
-result = op.run_ssh(ssh)
-
 # 加载已有输出
 outputs = op.load_output(cfg.output_dir)
 ```
+
+**注意**: 本版本仅支持本地执行，SSH 远程模式已移除。如果本地 NC 文件下载不完整（被截断），请从服务器重新拷贝完整数据。
 
 ---
 
@@ -363,7 +360,7 @@ outputs = op.load_output(cfg.output_dir)
 | `KeyError: 'AUX_Sat'` | IPFUtils 解析 XML 时缺少参数 | 手动设置 `ipf_config.AUX_Sat` |
 | `IndexError: list index out of range` (04-CAL) | XML 只有一个 `<Input>` 节点 | 生成两个 `<Input>` 节点 |
 | `AttributeError` (字体相关) | 缺少 SimHei.ttf 字体文件 | 复制到 `operators/gpf_src/<module>/conf/` |
-| HDF5 读取失败 (`truncated file`) | NC 文件下载不完整 | 重新下载或使用 SSH 远程执行 |
+| HDF5 读取失败 (`truncated file`) | NC 文件下载不完整 | **重新下载完整数据**（已移除 SSH 远程回退） |
 | `ModuleNotFoundError: No module named 'tables'` | 缺少 PyTables 依赖 | `pip install tables -i https://pypi.tuna.tsinghua.edu.cn/simple` |
 | 模块缓存冲突 | 多次运行后 `IPFUtils` 被污染 | 清理 `sys.modules.pop("IPFUtils")` |
 
@@ -379,9 +376,6 @@ python tests/test_wrappers.py
 
 # 测试本地执行 (01/02-MATCH/CAL)
 python tests/test_operators.py
-
-# 测试 SSH 端到端
-python tests/test_ssh_e2e.py
 ```
 
 ### 运行主程序

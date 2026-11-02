@@ -27,12 +27,8 @@ class StarCrossCalOperator(BaseOperator):
         if not self.config.start_date or not self.config.end_date:
             raise ValueError("必须指定 start_date 和 end_date")
             
-    def run_ssh(self, ssh_client) -> Dict[str, Any]:
-        """通过 SSH 执行远程 CAL"""
         from data_adapter.xml_generator import generate_star_cross_cal_xml
-        from data_adapter.ssh_executor import SSHExecutor
         
-        executor = SSHExecutor()
         
         xml_content = generate_star_cross_cal_xml(
             sat_id=self.config.sat_id,
@@ -112,11 +108,9 @@ class StarCrossCalOperator(BaseOperator):
                 'Data_version': self.config.data_version.lstrip('V'),
                 'order_id': self.config.order_id or 0,
                 'Order_Id': self.config.order_id or 0,
-                'Product_Type': 'SSH',
                 'Start_date': self.config.start_date,
                 'End_date': self.config.end_date,
                 'output': str(Path(self.config.output_dir or './output').resolve()),
-                'outputFileType': 'SSH',
                 'input': str(Path(local_input_dir).resolve()),
                 'Match_Data_Type': self.config.aux_data_type,
                 'Select_Area': str(self.config.select_area) if self.config.select_area else None,

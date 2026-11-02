@@ -234,7 +234,6 @@ class SelfCrossCalibration:
             if data is None:
                 return {"status": "failed", "error": "No match data found", "n_samples": 0}
             
-            # For self-cross, typically compare ascending vs descending SSH
             # This is a simplified wrapper - original code has more complex track identification
             ssh_diff = data['ssh_diff']
             

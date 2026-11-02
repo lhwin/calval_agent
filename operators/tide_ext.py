@@ -101,7 +101,6 @@ class TideStationExtension:
                                     else:
                                         valid_sshalt = np.asarray(sshalt)
                                     
-                                    # 对每个有效的卫星 SSH 点，配对同一个验潮站值
                                     for ssh_val in valid_sshalt:
                                         if not np.isnan(ssh_val):
                                             ssh_sat_vals.append(float(ssh_val))
