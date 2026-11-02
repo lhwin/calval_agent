@@ -344,8 +344,4 @@ MIT License
 ---
 
 ## 📞 联系方式
-
-项目维护者: satelite 配置文件
-文档地址: `D:\Software\hermes\profiles\satelite\skills\geophysical-data-processing\SKILL.md`
-=======
-
+1097304039@qq.com
