@@ -1,0 +1,107 @@
+# ============================================
+# Cal/Val Agent - .gitignore
+# 未经许可禁止商用 (see LICENSE)
+# ============================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- 日志与输出 ----------
+logs/
+*.log
+output/
+output_local_test/
+
+# ---------- 虚拟环境 ----------
+venv/
+env/
+.env
+.venv/
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# 大型数据文件（不入库，需单独分发）
+# ============================================
+*.nc
+*.h5
+*.hdf5
+*.he5
+
+# 压缩包
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# 二进制/编译产物
+*.exe
+*.dll
+*.bin
+*.o
+*.a
+*.obj
+*.pyd
+
+# ============================================
+# GPF 编译产物与运行时数据
+# ============================================
+operators/gpf_src/**/release/processing/
+operators/gpf_src/**/release/bin/
+operators/gpf_src/**/result/
+operators/gpf_src/**/output/
+operators/gpf_src/**/temp/
+operators/gpf_src/**/log/
+operators/gpf_src/**/*.spec
+
+# GPF 测试数据（体积巨大，单独管理）
+GPF_test_data/
+
+# ============================================
+# GPF 源码目录（包含大量编译产物和数据文件）
+# 仅保留包装器代码，原始 GPF 模块不入库
+# ============================================
+operators/gpf_src/
+
+# ============================================
+# 临时文件
+# ============================================
+*.tmp
+*.bak
+*.orig
+*.rej
+.cache/scratch/
+
+# ============================================
+# 敏感信息（切勿提交）
+# ============================================
+id_rsa
+id_ed25519
+*.pem
+*.key
+credentials.json
+secrets.yaml
+.env.local
+configs/local_settings.yaml

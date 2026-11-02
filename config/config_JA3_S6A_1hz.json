@@ -1,0 +1,118 @@
+{
+    "var_schema": {
+        "compareALT": {
+            "lat": {"candidates": ["data_01/latitude"]},
+            "lon": {"candidates": ["data_01/longitude"]},
+            "alt": {"candidates": ["data_01/altitude"]},
+            "range_ku": {"candidates": ["data_01/ku/range_ocean"]},
+            "surf_flag": {"candidates": ["data_01/surface_classification_flag"]},
+            "time": {"candidates": ["data_01/time"]},
+            "dry": {"candidates": ["data_01/model_dry_tropo_cor_measurement_altitude"]},
+            "wet": {"candidates": ["data_01/rad_wet_tropo_cor"]},
+            "iono": {"candidates": ["data_01/ku/iono_cor_alt"]},
+            "ssb_ku": {"candidates": ["data_01/ku/sea_state_bias"]},
+            "ocean_tide": {"candidates": ["data_01/ocean_tide_fes"]},
+            "solid_earth": {"candidates": ["data_01/solid_earth_tide"]},
+            "pole_tide": {"candidates": ["data_01/pole_tide"]},
+            "dac": {"candidates": ["data_01/dac"]},
+            "inv_bar": {"candidates": ["data_01/inv_bar_cor"]},
+            "swh": {"candidates": ["data_01/ku/swh_ocean"]},
+            "sig0": {"candidates": ["data_01/ku/sig0_ocean"]},
+            "wind_speed": {"candidates": ["data_01/wind_speed_alt"]},
+            "distance": {"candidates": ["data_01/distance_to_coast"]},
+            "depth": {"candidates": ["data_01/depth_or_elevation"]}
+        },
+        "referenceALT": {
+            "lat": {"candidates": ["data_01/latitude"]},
+            "lon": {"candidates": ["data_01/longitude"]},
+            "alt": {"candidates": ["data_01/altitude"]},
+            "range_ku": {"candidates": ["data_01/ku/range_ocean"]},
+            "surf_flag": {"candidates": ["data_01/surface_classification_flag"]},
+            "time": {"candidates": ["data_01/time"]},
+            "dry": {"candidates": ["data_01/model_dry_tropo_cor_measurement_altitude"]},
+            "wet": {"candidates": ["data_01/rad_wet_tropo_cor"]},
+            "iono": {"candidates": ["data_01/ku/iono_cor_gim"]},
+            "ssb_ku": {"candidates": ["data_01/ku/sea_state_bias"]},
+            "ocean_tide": {"candidates": ["data_01/ocean_tide_sol1"]},
+            "solid_earth": {"candidates": ["data_01/solid_earth_tide"]},
+            "pole_tide": {"candidates": ["data_01/pole_tide"]},
+            "dac": {"candidates": ["data_01/dac"]},
+            "inv_bar": {"candidates": ["data_01/inv_bar_cor"]},
+            "swh": {"candidates": ["data_01/ku/swh_ocean"]},
+            "sig0": {"candidates": ["data_01/ku/sig0_ocean"]},
+            "wind_speed": {"candidates": ["data_01/wind_speed_alt"]},
+            "distance": {"candidates": ["data_01/distance_to_coast"]},
+            "depth": {"candidates": ["data_01/depth_or_elevation"]}
+        }
+    },
+    "quality_filter": {
+        "compareALT": {
+            "dry": {"min": -2.5, "max": -1.9},
+            "wet": {"min": -0.5, "max": -0.001},
+            "iono": {"min": -0.4, "max": 0.04},
+            "ssb_ku": {"min": -0.5, "max": 0.0},
+            "swh": {"min": 0.0, "max": 11.0},
+            "sig0": {"min": 5.0, "max": 30.0}
+        },
+        "referenceALT": {
+            "dry": {"min": -2.5, "max": -1.9},
+            "wet": {"min": -0.5, "max": -0.001},
+            "iono": {"min": -0.4, "max": 0.04},
+            "ssb_ku": {"min": -0.5, "max": 0.0},
+            "swh": {"min": 0.0, "max": 11.0},
+            "sig0": {"min": 5.0, "max": 30.0}
+        }
+    },
+    "quality_control": {
+        "sigma0": {
+            "lat_min": -70.0,
+            "lat_max": 70.0,
+            "distance_min": 50000.0,
+            "depth_min": 1000.0,
+            "param_min": 5.0,
+            "param_max": 30.0,
+            "gross_error_threshold": 1.5
+        },
+        "swh": {
+            "lat_min": -70.0,
+            "lat_max": 70.0,
+            "distance_min": 50000.0,
+            "depth_min": 1000.0,
+            "param_min": 0.0,
+            "param_max": 15.0,
+            "gross_error_threshold": 1.0
+        },
+        "wind": {
+            "lat_min": -70.0,
+            "lat_max": 70.0,
+            "distance_min": 50000.0,
+            "depth_min": 1000.0,
+            "param_min": 2.0,
+            "param_max": 40.0,
+            "gross_error_threshold": 3.0
+        }
+    },
+    "compareALT": "J3A",
+    "referenceALT": "S6A",
+    "processing_params": {
+        "workers": 20,
+        "starttime": null,
+        "endtime": null,
+        "timespan": 10,
+        "latlim": 60,
+        "depthlim": -100,
+        "distance": 50000,
+        "varlim": 0.3,
+        "timeediting": 3,
+        "analysis_time_window_hours": 2
+    },
+    "path": [{
+        "path1": "H:\\Dell_7520\\F\\share\\2022\\ALT\\J3_201908",
+        "path2": "H:\\Dell_7520\\F\\share\\2022\\ALT\\XX-6",
+        "libpath": "D:\\python\\XOver_20220731",
+        "savepath_fig": "./output/result/fig",
+        "background" : "./shp/ne_50m_land.shp",
+        "savepath_h5": "./output/result/h5",
+        "csv_path": "./output/result/csv"
+    }]
+}
