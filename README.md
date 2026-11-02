@@ -42,75 +42,230 @@ python main.py "用验潮站做绝对基准参考"
 
 ---
 
-## 🏗️ 架构概览
+## 🏗️ 系统架构
+
+### 层级视图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     用户界面层                               │
+│  python main.py "用 S6A 和 JA3 做 2023 年 5 月的星间交叉"        │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│              LangGraph 工作流引擎 (7 个节点)                   │
+│                                                             │
+│  [task_parser] → [data_discovery] → [data_health_check]     │
+│                                               ↓             │
+│  [result_summarizer] ← [execute_operator] ← [method_recommendation] ← [branch_decision] │
+│                                  ↖ [fallback] ↙               │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  核心能力层 (层级 1/层级 2)                     │
+│                                                             │
+│  ✨ 层级 1 (已完成):                                        │
+│  ├─ DataHealthChecker: NC/H5完整性诊断                      │
+│  ├─ MethodRecommendation: 方法选择建议                       │
+│  └─ BranchDecision: 数据存在性判断                          │
+│                                                             │
+│  🟡 层级 2 (规划中):                                         │
+│  ├─ ParamOptimizer: 自适应参数调整                          │
+│  ├─ ChainExecution: MATCH→CAL链式执行                       │
+│  ├─ QualityEvaluator: 结果质量评估                          │
+│  └─ SmartRetry: 智能失败恢复                                │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    算子包装器层                              │
+│                                                             │
+│  8 个 GPF 包装器 (每个支持 run_local / run_ssh):               │
+│  ├─ StarCross{Match,Cal}Operator                           │
+│  ├─ SelfCross{Match,Cal}Operator                           │
+│  ├─ Sig0Cross{Match,Cal}Operator                           │
+│  └─ Ycz{Match,Cal}Operator                                 │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    数据适配层                                │
+│  ├─ LocalDataExplorer (数据扫描)                            │
+│  ├─ XMLGenerator (工单生成)                                 │
+│  └─ SSHExecutor (远程执行)                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 目录结构
 
 ```
 calval_agent/
-├── agents/
-│   ├── workflow.py           # LangGraph 工作流 (6 个节点)
-│   ├── task_parser.py        # 自然语言解析器
-│   └── state.py              # Agent 状态定义
+├── agents/                          # LangGraph 工作流
+│   ├── workflow.py                  # 8 个节点的图定义
+│   ├── state.py                     # Agent 状态 (20+ 字段)
+│   ├── task_parser.py               # 自然语言解析
+│   └── data_health_check.py         # ✨ 层级 1: 数据健康诊断
 ├── operators/
-│   ├── gpf_src/              # GPF 原始源码 (从服务器拷贝)
-│   ├── star_cross_match.py   # 01-MATCH 包装器
-│   ├── star_cross_cal.py     # 01-CAL 包装器
-│   ├── self_cross_match.py   # 02-MATCH
-│   ├── self_cross_cal.py     # 02-CAL
-│   ├── sig0_cross_match.py   # 03-MATCH
-│   ├── sig0_cross_cal.py     # 03-CAL
-│   ├── ycz_match.py          # 04-MATCH
-│   └── ycz_cal.py            # 04-CAL
+│   ├── gpf_src/                     # GPF 原始源码 (外部拷贝)
+│   ├── star_cross_match.py          # 01-MATCH 包装器
+│   ├── star_cross_cal.py            # 01-CAL 包装器
+│   ├── self_cross_match.py          # 02-MATCH
+│   ├── self_cross_cal.py            # 02-CAL
+│   ├── sig0_cross_match.py          # 03-MATCH
+│   ├── sig0_cross_cal.py            # 03-CAL
+│   ├── ycz_match.py                 # 04-MATCH
+│   └── ycz_cal.py                   # 04-CAL
 ├── core/
-│   ├── base_operator.py      # 算子基类
-│   └── op_config.py          # LocalConfig 配置类
+│   ├── base_operator.py             # 算子基类
+│   ├── op_config.py                 # LocalConfig
+│   ├── config.py                    # 配置加载
+│   ├── models.py                    # 数据模型
+│   └── operators_map.py             # 算子元信息映射
 ├── data_adapter/
-│   ├── explorer.py           # 本地数据扫描器
-│   ├── xml_generator.py      # XML 工单生成器
-│   └── ssh_executor.py       # SSH 远程执行器
-├── GPF_test_data/            # 本地测试数据
-│   ├── star_cross/
-│   │   ├── input/S6A_20230501_20230503/   # S6A NC (66 个)
-│   │   ├── input/NC/                      # 合并 NC 目录
-│   │   └── match_result_S6A_vs_JA3_*.npz  # 已有匹配结果
-│   ├── self_cross/
-│   │   ├── input/NC/                      # 自交叉 NC
-│   │   └── calibration_data_JA3_self_cross_*.npz
-│   ├── sig0_cross/
-│   │   └── XOver_data_*.h5                # SIG0 交叉数据
-│   └── tide_ext/
-│       ├── input/{DTU18MSS_1min.nc, WSTG/, HY-2BGDR/}
-│       └── input_npz/MATCHED_H2B_YCZ_*.npz
-├── output_local_test/        # 本地输出
-├── config/                   # 配置文件
-│   └── config_JA3_S6A_1hz.json
-├── configs/settings.yaml     # 全局设置
-├── main.py                   # 入口
-└── requirements.txt
+│   ├── explorer.py                  # 本地数据扫描
+│   ├── xml_generator.py             # XML 工单生成
+│   └── ssh_executor.py              # SSH 远程执行
+├── GPF_test_data/                   # 测试数据 (外部管理)
+│   ├── star_cross/                  # 01 测试数据
+│   ├── self_cross/                  # 02 测试数据
+│   ├── sig0_cross/                  # 03 测试数据
+│   └── tide_ext/                    # 04 测试数据
+├── tests/                           # 单元测试
+│   ├── test_wrappers.py             # 包装器实例化测试
+│   ├── test_operators.py            # 本地执行测试
+│   ├── test_ssh_e2e.py              # SSH 端到端测试
+│   └── test_0304_match.py           # 03/04 MATCH 测试
+├── docs/                            # 文档
+│   ├── functional_spec.md           # 功能规格书 (层级 1/2)
+│   └── architecture.md              # 技术架构图
+├── configs/
+│   └── settings.yaml                # 全局配置
+├── main.py                          # 入口
+├── requirements.txt
+├── .gitignore
+└── LICENSE                          # 非商用许可
 ```
 
 ---
 
-## 🔄 工作流逻辑
+## 🔄 工作流节点详解
 
+### 节点 1: Task Parser
+
+**功能**: 解析自然语言 → 结构化任务  
+**输入**: `"用 S6A 和 JA3 做 2023 年 5 月的星间交叉"`  
+**输出**:
+```python
+{
+  "primary_sat": "S6A",
+  "aux_data_type": "JA3", 
+  "method": "star_cross",
+  "start_date": "20230501",
+  "end_date": "20230531"
+}
 ```
-用户指令 (NL)
-   ↓
-[task_parser] → 提取卫星、日期、方法
-   ↓
-[data_discovery] → 扫描本地/远程数据
-   ├─ 发现 NC 目录 → next_step="match" → MATCH 算子
-   └─ 发现 NPZ 文件 → next_step="cal" → CAL 算子
-   ↓
-[branch_decision] → 有数据则执行，无数据则重试
-   ├─ 成功 → execute_operator
-   └─ 失败 → fallback_relax_params (最多 3 次)
-   ↓
-[execute_operator] → 调用对应的算子包装器
-   ├─ run_local()  ← 本地执行 (优先)
-   └─ run_ssh()    ← SSH 远程 (备用)
-   ↓
-[result_summarizer] → 汇总结果
+
+### 节点 2: Data Discovery
+
+**功能**: 扫描本地/远程数据  
+**输入**: `{sat_id, date_range}`  
+**输出**: `available_datasets = [{path, format, size, ...}]`
+
+### 节点 3: Data Health Check ✨ 层级 1
+
+**功能**: 诊断 NC/H5 文件完整性  
+**检查项**:
+- 文件大小合理性
+- 必需变量存在性 (`latitude`, `range_correction`, `ssh`)
+- 时间范围覆盖
+- 数据点数量
+
+**输出**:
+```python
+{
+  "status": "healthy|warning|degraded|critical",
+  "details": {
+    "total_files": 47,
+    "healthy": 27,
+    "corrupted": 20
+  },
+  "recommendations": ["警告：20/47 文件无法读取"]
+}
 ```
+
+### 节点 4: Method Recommendation ✨ 层级 1
+
+**功能**: 基于数据特征推荐定标方法  
+**逻辑**:
+1. 数据不健康 (`critical/degraded`) → **阻断** + 建议替代方法
+2. 数据充足 (`available_count > 5`) → **允许继续**
+3. 数据不足 → 推荐备选方案
+
+**示例**:
+```
+输入：{method: "star_cross", available_count: 1}
+输出: {
+  action: "proceed",
+  confidence: "low",
+  reasoning: ["星间交叉适合检测卫星间系统性偏差", "但数据量不足 (1 个)"],
+  alternative_methods: [{method: "self_cross", reason: "可先做自交叉监测漂移"}]
+}
+```
+
+### 节点 5: Branch Decision
+
+**功能**: 根据推荐结果路由  
+**分支**:
+- `abort` → 直接结束，返回诊断报告
+- `proceed` → 进入执行阶段
+
+### 节点 6: Execute Operator
+
+**功能**: 执行选定的算子包装器  
+**模式**:
+- `run_local()`: 直接调用 Python 源码 (优先)
+- `run_ssh()`: 远程执行 (备用)
+
+### 节点 7: Fallback 🟡 层级 2
+
+**功能**: 智能重试策略  
+**策略**:
+```python
+retry 1: 放宽海岸距离 (50km → 100km)
+retry 2: 放宽海洋深度 (1000m → 2000m)
+retry 3: 放宽风速范围 ([2, 40] → [0, 50])
+max_retries: 3
+```
+
+### 节点 8: Result Summarizer
+
+**功能**: 汇总最终结果  
+**输出**: JSON/TXT/PNG产品
+
+---
+
+## 🎯 层级演进路线
+
+### ✨ 层级 1 (已完成) — **数据智能与诊断**
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| `DataHealthChecker` | NC/H5完整性诊断 | ✅ |
+| `MethodRecommendation` | 方法选择建议 | ✅ |
+| `BranchDecision` | 数据存在性判断 | ✅ |
+| `AutoAbort` | 数据质量不佳时自动阻断 | ✅ |
+
+**核心价值**: 避免无效计算，提前识别数据质量问题。
+
+### 🟡 层级 2 (规划中) — **自适应与优化**
+
+| 模块 | 功能 | 计划 |
+|------|------|------|
+| `ParamOptimizer` | 根据数据特征动态调整参数 | Week 5-6 |
+| `ChainExecution` | MATCH→CAL自动链式执行 | Week 5-6 |
+| `QualityEvaluator` | 结果质量评分 (RMSE/R²/残差分布) | Week 6 |
+| `SmartRetry` | 基于失败原因的自适应重试 | Week 6 |
+| `KnowledgeBase` | 历史案例记忆与复用 | Week 7-8 |
+
+**预期效果**: 实现"一句话定标"，全流程无需人工干预。
 
 ---
 
@@ -159,7 +314,7 @@ match_results = explorer.find_match_files(sat_id="S6A")
 每个算子提供三种执行模式：
 
 ```python
-from operators import get_operator
+from operators import OperatorRegistry
 from core.op_config import LocalConfig
 
 # 配置
@@ -172,18 +327,30 @@ cfg = LocalConfig(
     output_dir="output_local_test/star_cross"
 )
 
-# 创建算子
-op_class = get_operator("star_cross_match")
-op = op_class(cfg)
+# 运行 MATCH
+result = OperatorRegistry.run("star_cross_match", cfg)
+print(result["status"])
 
-# 模式 1: 本地执行 (直接从源码调用)
+# 运行 CAL (需要先有 MATCH 结果)
+# result = OperatorRegistry.run("star_cross_cal", cfg)
+```
+
+每个算子类继承 `BaseOperator`，提供以下方法：
+
+```python
+from operators.star_cross_match import StarCrossMatchOperator
+
+op = StarCrossMatchOperator(cfg)
+
+# 本地执行
 result = op.run_local(cfg.input_dir)
 
-# 模式 2: SSH 远程执行 (需远程服务器)
-# from data_adapter.ssh_executor import SSHExecutor
-# result = op.run_ssh(ssh_client)
+# SSH 远程执行
+from data_adapter.ssh_executor import SSHExecutor
+ssh = SSHExecutor(host="192.168.240.132", username="leehir", key_path="~/.ssh/id_ed25519")
+result = op.run_ssh(ssh)
 
-# 模式 3: 加载已有结果
+# 加载已有输出
 outputs = op.load_output(cfg.output_dir)
 ```
 
@@ -339,8 +506,8 @@ func_cross_matching_pro(MyIPFConfig("xml_file.xml"))
 
 ## 📄 许可证
 
-MIT License
-未经允许，不得商用，商用联系作者 1097304039@qq.com (1元/年)
+**未经授权，不得用于商业用途**。  
+商用请联系：1097304039@qq.com (1 元/年)
 ---
 
 ## 📞 联系方式
