@@ -36,86 +36,13 @@ def task_parser_node(state: AgentState) -> AgentState:
     }
 
 
-def data_health_check_node(state: AgentState) -> AgentState:
-    """数据质量诊断节点 - 检查数据健康状况"""
-    from .data_health_check import DataHealthChecker
-    
-    selected = state.get("selected_data") or {}
-    available = state.get("available_datasets", [])
-    
-    if not selected and not available:
-        return {
-            "health_report": {"status": "no_data", "message": "无可用数据"},
-            "logs": state["logs"] + [{"event": "health_check_skipped", "reason": "no_data"}],
-        }
-    
-    checker = DataHealthChecker()
-    
-    # 如果有具体文件路径，进行详细检查
-    if selected.get("path"):
-        path = selected["path"]
-        
-        # NC 文件检查
-        if path.endswith('.nc'):
-            health = checker.check_nc_integrity(path)
-        # H5 文件检查
-        elif path.endswith('.h5'):
-            health = checker.check_h5_integrity(path)
-        # 目录检查（批量）
-        else:
-            from .data_health_check import quick_scan
-            health = quick_scan(path)
-    else:
-        # 对可用数据集进行快速扫描
-        health = checker.assess_coverage(available)
-    
-    # 生成诊断报告
-    corrupted_count = health.get("corrupted", 0)
-    healthy_count = health.get("healthy", 0)
-    total_count = health.get("total_files", 0)
-    
-    # 计算损坏比例
-    corruption_ratio = corrupted_count / total_count if total_count > 0 else 0
-    
-    # 判断健康状态等级
-    if corrupted_count == total_count or corruption_ratio > 0.8:
-        status = "critical"
-    elif healthy_count == 0 and corrupted_count > 0:
-        status = "degraded"
-    elif corruption_ratio > 0.3:
-        status = "warning"
-    else:
-        status = "healthy"
-    
-    report = {
-        "status": status,
-        "details": health,
-        "recommendations": []
-    }
-    
-    # 根据诊断结果生成建议
-    if status == "critical":
-        report["recommendations"].append(f"严重警告：{corrupted_count}/{total_count} 文件损坏，无法继续定标作业")
-        report["recommendations"].append("建议：1. 重新下载完整数据  2. 切换 SSH 远程执行模式")
-    elif status == "degraded":
-        report["recommendations"].append(f"警告：{corrupted_count}/{total_count} 文件无法读取")
-        report["recommendations"].append("建议：检查数据完整性或联系数据提供方")
-    elif status == "warning":
-        report["recommendations"].append(f"部分文件存在问题 ({corrupted_count}个)，但仍可尝试继续")
-    
-    return {
-        "health_report": report,
-        "logs": state["logs"] + [{"event": "health_check_completed", "status": status, "corrupted": corrupted_count, "healthy": healthy_count}],
-    }
-
-
 def method_recommendation_node(state: AgentState) -> AgentState:
     """方法推荐节点 - 使用 LLM 智能分析数据特征并推荐最佳定标方法"""
     from .llm_client import LLMClient
     
     parsed = state.get("parsed_task", {})
-    health = state.get("health_report", {})
     available_datasets = state.get("available_datasets", [])
+    metadata = state.get("metadata") or {}
     
     if not parsed:
         return {
@@ -123,24 +50,7 @@ def method_recommendation_node(state: AgentState) -> AgentState:
             "logs": state["logs"] + [{"event": "recommendation_skipped", "reason": "no_parsed_task"}],
         }
     
-    # 获取诊断结果
-    health_status = health.get("status", "unknown")
-    
-    # 如果数据不健康，直接阻断（快速响应，不调用 LLM）
-    if health_status in ("critical", "degraded"):
-        return {
-            "recommendation": {
-                "action": "abort",
-                "reason": f"数据质量不佳 ({health_status})",
-                "confidence": "high",
-                "reasoning": health.get("recommendations", ["请检查数据完整性"]),
-                "alternative_methods": []
-            },
-            "branch_path": "abort_data_quality",
-            "logs": state["logs"] + [{"event": "recommendation_abort", "reason": health_status}],
-        }
-    
-    # 准备 LLM 上下文
+    # 准备 LLM 上下文（去掉健康检查部分）
     task_info = {
         "primary_satellite": parsed.get("primary_sat"),
         "auxiliary_data": parsed.get("aux_data_type"),
@@ -159,14 +69,16 @@ def method_recommendation_node(state: AgentState) -> AgentState:
             "record_count": ds.get("record_count"),
             "time_range": ds.get("time_range"),
         })
-    
+
+    # 从 discovery 阶段拿统计（新版 explorer 返回的是卫星文件夹级）
+    data_summary = (metadata or {}).get("data_summary", {})
+
     # 组装完整上下文
     context = {
         **task_info,
         "available_datasets": dataset_summary,
-        "data_health_status": health_status,
-        "health_details": health.get("details", {}),
         "total_samples": len(dataset_summary),
+        "data_summary": data_summary,
     }
     
     # 调用 LLM 生成智能推荐
@@ -174,23 +86,20 @@ def method_recommendation_node(state: AgentState) -> AgentState:
         llm = LLMClient()
         recommendation_text = llm.generate_recommendation(context)
         
-        # 解析 LLM 回复为结构化数据（简化版，实际应该用正则提取）
-        # 这里假设 LLM 会按特定格式回复，我们做基本解析
         recommendation = {
-            "action": "proceed",  # 默认允许继续
+            "action": "proceed",
             "method": parsed.get("method"),
             "confidence": "medium",
-            "reasoning": [recommendation_text],  # 保留完整回复作为推理依据
+            "reasoning": [recommendation_text],
             "alternative_methods": [],
             "llm_analysis": recommendation_text,
             "risk_factors": [],
             "warnings": []
         }
         
-        # 简单解析 LLM 回复中的关键词
         text_lower = recommendation_text.lower()
         
-        if "data不足" in text_lower or "insufficient" in text_lower:
+        if "data 不足" in text_lower or "insufficient" in text_lower:
             recommendation["confidence"] = "low"
             if parsed.get("method") == "star_cross":
                 recommendation["alternative_methods"].append({
@@ -199,7 +108,6 @@ def method_recommendation_node(state: AgentState) -> AgentState:
                 })
         
         if "建议改用" in text_lower or "consider" in text_lower:
-            # 提取建议的方法
             if "自交叉" in text_lower or "self-cross" in text_lower:
                 recommendation["alternative_methods"].append({
                     "method": "self_cross",
@@ -218,7 +126,6 @@ def method_recommendation_node(state: AgentState) -> AgentState:
             recommendation["action"] = "review"
             
     except Exception as e:
-        # LLM 调用失败时的降级策略：回退到简单规则
         recommendation = {
             "action": "proceed",
             "method": parsed.get("method"),
@@ -229,13 +136,10 @@ def method_recommendation_node(state: AgentState) -> AgentState:
             "warnings": ["未启用 LLM 智能推荐，请自行评估"]
         }
     
-    # 确定分支路径
+    branch_path = "abort_no_data" if len(available_datasets) == 0 else "execute"
     if len(available_datasets) == 0:
-        branch_path = "abort_no_data"
         recommendation["action"] = "abort"
         recommendation["reasoning"].append("无可用数据集，无法执行定标")
-    else:
-        branch_path = "execute"
     
     return {
         "recommendation": recommendation,
@@ -249,78 +153,68 @@ def data_discovery_node(state: AgentState) -> AgentState:
         from ..data_adapter.explorer import LocalDataExplorer
     except ImportError:
         from data_adapter.explorer import LocalDataExplorer
+    import yaml
 
     parsed = state.get("parsed_task", {})
     if not parsed or not parsed.get("method"):
         return {"available_datasets": [], "logs": state["logs"] + [{"event": "skipped_discovery"}]}
 
     method = parsed.get("method")
-    data_map = {
-        "star_cross": "GPF_test_data/star_cross",
-        "self_cross": "GPF_test_data/self_cross",
-        "sig0_cross": "GPF_test_data/sig0_cross",
-        "ycz_match": "GPF_test_data/tide_ext",
-        "tide_ext": "GPF_test_data/tide_ext",
-    }
-    base_dir = data_map.get(method, "GPF_test_data")
+    primary_sat = parsed.get("primary_sat", "S6A")
+    aux_sat = parsed.get("aux_data_type", "JA3")
+    start_date = parsed.get("start_date", "20230101")
+    end_date = parsed.get("end_date", "20231231")
 
+    # 从 configs/settings.yaml 读取数据路径（参数化）
     try:
-        explorer = LocalDataExplorer(base_dir)
-        if method in ("star_cross", "self_cross"):
-            # 策略: 优先找 NC 目录（用于 MATCH），其次找已有 NPZ（用于 CAL）
-            nc_dirs = explorer.find_nc_files(
-                sat_id=parsed.get("primary_sat"),
-                date_range=(parsed.get("start_date"), parsed.get("end_date")),
-            )
-                
-            # 按父目录聚合 NC 文件
-            nc_by_dir = {}
-            for f in nc_dirs:
-                d = str(Path(f["path"]).parent)
-                nc_by_dir.setdefault(d, {"path": d, "nc_files": [], "sat_id": f["sat_id"]})
-                nc_by_dir[d]["nc_files"].append(f)
-                
-            nc_dataset_list = list(nc_by_dir.values())
-                
-            # 检查已有 MATCH 结果 (NPZ)
-            match_files = explorer.find_match_files(
-                sat_id=parsed.get("primary_sat"),
-                date_range=(parsed.get("start_date"), parsed.get("end_date")),
-            )
-                
-            # 如果有 NC 就建议 MATCH，否则建议 CAL (前提是 NPZ 存在)
-            if nc_dataset_list:
-                # 优先使用输入目录跑 MATCH
-                datasets = nc_dataset_list
-                next_step = "match"
-            elif match_files:
-                datasets = match_files
-                next_step = "cal"
-            else:
-                datasets = []
-                next_step = None
-        elif method == "sig0_cross":
-            datasets = explorer.find_h5_files(base_dir)
-            next_step = "match" if datasets else None
-        elif method in ("ycz_match", "tide_ext"):
-            datasets = explorer.find_tide_data(base_dir)
-            next_step = "match" if datasets else None
+        with open("configs/settings.yaml", "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        data_cfg = cfg.get("data", {})
+        base_dir = data_cfg.get(method, data_cfg.get("base_dir", "data"))
+    except Exception:
+        base_dir = "data"
+
+    explorer = LocalDataExplorer(base_dir)
+    try:
+        # 星间交叉需要两颗星的数据；自交叉只需要一颗
+        if method == "star_cross":
+            all_folders = explorer.discover_satellite_folders(date_range=(start_date, end_date))
+            # 过滤出主星和辅星的目录
+            target_sats = [primary_sat.upper(), aux_sat.upper()]
+            datasets = [f for f in all_folders if f["sat_id"].upper() in target_sats]
         else:
-            datasets = []
-            next_step = None
+            all_folders = explorer.discover_satellite_folders(
+                sat_id=primary_sat,
+                date_range=(start_date, end_date)
+            )
+            datasets = all_folders
+
+        # 统计每个卫星文件夹的 NC 数量（供 LLM 决策）
+        sat_stats = {}
+        for f in all_folders:
+            sat_stats[f["sat_id"]] = f["nc_count"]
+
+        data_summary = {
+            "primary_sat": primary_sat,
+            "aux_sat": aux_sat,
+            "satellite_stats": sat_stats,
+            "total_files": sum(f["nc_count"] for f in all_folders),
+            "matched_sats": [f["sat_id"] for f in datasets],
+        }
+
     except Exception as e:
         return {
             "available_datasets": [],
             "selected_data": None,
-            "metadata": {"next_step": None},
+            "metadata": {"next_step": None, "data_summary": {}},
             "logs": state["logs"] + [{"event": "discovery_error", "error": str(e)[:200]}],
         }
 
     return {
         "available_datasets": datasets,
         "selected_data": datasets[0] if datasets else None,
-        "metadata": {"next_step": next_step},
-        "logs": state["logs"] + [{"event": "datasets_found", "count": len(datasets)}],
+        "metadata": {"next_step": "match" if datasets else None, "data_summary": data_summary},
+        "logs": state["logs"] + [{"event": "datasets_found", "count": len(datasets), "stats": sat_stats}],
     }
 
 
@@ -373,8 +267,8 @@ def execute_operator_node(state: AgentState) -> AgentState:
 
     # 根据 discovery 阶段的 next_step 决定 MATCH/CAL
     next_step = metadata.get("next_step", "match")  # 默认 match
-    has_nc_files = isinstance(selected.get("nc_files"), list) and len(selected["nc_files"]) > 0
-    
+    has_nc_files = isinstance(selected.get("nc_files"), list) and len(selected.get("nc_files", [])) > 0
+
     operator_name = None
     if method == "star_cross":
         operator_name = "star_cross_match" if next_step == "match" or has_nc_files else "star_cross_cal"
@@ -390,13 +284,31 @@ def execute_operator_node(state: AgentState) -> AgentState:
 
     op_cls = ALL_OPERATORS[operator_name]
 
+    # 星间交叉/自交叉需要两颗星的数据目录
+    aux_input_dir = None
+    primary_input_dir = selected.get("path") or selected.get("input_dir") or ""
+    
+    if method in ("star_cross", "self_cross") and aux_type != "UNKNOWN":
+        # 从可用数据集里找两颗星的目录
+        available = state.get("available_datasets", [])
+        for ds in available:
+            if ds.get("sat_id", "").upper() == sat_id.upper():
+                primary_input_dir = ds.get("path") or primary_input_dir
+            elif ds.get("sat_id", "").upper() == aux_type.upper():
+                aux_input_dir = ds.get("path") or aux_input_dir
+        
+        # 如果找不到，就用选中的那个（默认同目录）
+        if not aux_input_dir:
+            aux_input_dir = primary_input_dir
+
     cfg_kwargs = {
         "sat_id": sat_id,
         "aux_data_type": aux_type if aux_type != "UNKNOWN" else parsed.get("aux_data_type", ""),
         "start_date": parsed.get("start_date", "20230101"),
         "end_date": parsed.get("end_date", "20231231"),
         "output_dir": f"output_local_test/{method}_{retry_count}",
-        "input_dir": selected.get("path", "GPF_test_data"),
+        "input_dir": primary_input_dir,
+        "aux_input_dir": aux_input_dir or primary_input_dir,
     }
 
     if method in ("ycz_match", "tide_ext"):
@@ -454,7 +366,6 @@ def create_workflow(debug: bool = False):
     nodes = {
         "task_parser": task_parser_node,
         "data_discovery": data_discovery_node,
-        "data_health_check": data_health_check_node,
         "method_recommendation": method_recommendation_node,
         "branch_decision": branch_decision_node,
         "execute_operator": execute_operator_node,
@@ -466,8 +377,7 @@ def create_workflow(debug: bool = False):
 
     graph_builder.set_entry_point("task_parser")
     graph_builder.add_edge("task_parser", "data_discovery")
-    graph_builder.add_edge("data_discovery", "data_health_check")
-    graph_builder.add_edge("data_health_check", "method_recommendation")
+    graph_builder.add_edge("data_discovery", "method_recommendation")
 
     def route_after_recommendation(state: AgentState) -> Literal["branch_decision", "result_summarizer"]:
         recommendation = state.get("recommendation", {})
@@ -507,7 +417,7 @@ def create_workflow(debug: bool = False):
         {"result_summarizer": "result_summarizer", "fallback": "fallback"},
     )
 
-    graph_builder.add_edge("fallback", "branch_decision")
+    graph_builder.add_edge("fallback", "result_summarizer")
     graph_builder.add_edge("result_summarizer", END)
     return graph_builder.compile()
 
@@ -522,7 +432,6 @@ def run_agent(task_text: str, debug: bool = False) -> Dict[str, Any]:
         "available_datasets": [],
         "selected_data": None,
         "metadata": None,
-        "health_report": None,
         "recommendation": None,
         "current_operator": None,
         "operator_config": None,

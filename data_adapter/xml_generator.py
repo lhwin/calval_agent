@@ -122,8 +122,19 @@ def generate_ycz_match_xml(sat_id: str, aux_ycz: str, start_date: str, end_date:
 
 
 def generate_star_cross_match_xml(sat_id: str, aux_sat: str, start_date: str, end_date: str,
-                                 input_dir: str = "./input", output_dir: str = "./output") -> str:
-    """生成星星交叉匹配工单 (01-MATCH)"""
+                                 input_dir: str = "./input", output_dir: str = "./output",
+                                 aux_input_dir: Optional[str] = None) -> str:
+    """生成星星交叉匹配工单 (01-MATCH)
+    
+    Args:
+        sat_id: 主卫星 ID (e.g. "S6A")
+        aux_sat: 辅助卫星 ID (e.g. "JA3")
+        input_dir: 主星数据目录
+        aux_input_dir: 辅星数据目录 (如不提供则使用 input_dir)
+    """
+    # 如果没提供辅星目录，默认用主星目录（兼容旧代码）
+    aux_dir = aux_input_dir or input_dir
+    
     job = GPFJobOrder(
         processor_name="gl_ssh_cross_match_pro",
         params={
@@ -136,8 +147,8 @@ def generate_star_cross_match_xml(sat_id: str, aux_sat: str, start_date: str, en
             "match_time": "2.0",
         },
         input_dirs={
-            "AUX_H2B_ALT_GDR": input_dir,
-            "AUX_SAT": input_dir,
+            "AUX_SAT": input_dir,        # 主星 - 放在第 0 位
+            "AUX_H2B_ALT_GDR": aux_dir,  # 辅星 - 放在第 1 位
         },
         output_dir=output_dir,
     )

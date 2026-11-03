@@ -19,8 +19,7 @@ class AgentState(TypedDict):
     selected_data: Annotated[Optional[Dict[str, Any]], "Selected data for processing"]
     metadata: Annotated[Optional[Dict[str, Any]], "Discovery metadata (e.g., next_step)"]
     
-    # Health Check
-    health_report: Annotated[Optional[Dict[str, Any]], "Data quality diagnostic report"]
+    # Recommendation
     recommendation: Annotated[Optional[Dict[str, Any]], "Method recommendation"]
     
     # Operator Execution

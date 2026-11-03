@@ -33,7 +33,7 @@ class StarCrossMatchOperator(BaseOperator):
             raise ValueError("必须指定 input_dir")
             
     def run_local(self, local_input_dir: str) -> Dict[str, Any]:
-        """本地执行 MATCH 流程 - 忠实源码: 生成 XML → MyIPFConfig → func_cross_matching_pro"""
+        """本地执行 MATCH 流程 - 使用标准 XML 生成器"""
         import sys
         import time
         from pathlib import Path
@@ -46,35 +46,22 @@ class StarCrossMatchOperator(BaseOperator):
             from func_GLSY_ALT_GDR_AUX_SAT_MATCH import func_cross_matching_pro
             from IPFUtils import MyIPFConfig
             
-            # 1. 生成 XML 工单 (与原 template.xml 结构一致)
-            job_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<Processor_Config>
-    <Processor_Name>cvs_glsy_alt_gdr_aux_sat_match</Processor_Name>
-    <Version>{self.config.version}</Version>
-    <Order_Id>{self.config.order_id or 0}</Order_Id>
-    <Input>
-        <File_Name>{local_input_dir}</File_Name>
-    </Input>
-    <Input>
-        <File_Name>{self.config.aux_input_dir or local_input_dir}</File_Name>
-    </Input>
-    <Output>
-        <File_Type>product</File_Type>
-        <File_Name>{self.config.output_dir or "./output"}</File_Name>
-    </Output>
-    <Processing_Parameters>
-        <Processing_Parameter><Name>Sat_ID</Name><Value>{self.config.sat_id}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>Data_version</Name><Value>{self.config.data_version.lstrip('V')}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>AUX_Sat</Name><Value>{self.config.aux_data_type}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>Start_date</Name><Value>{self.config.start_date}</Value></Processing_Parameter>
-        <Processing_Parameter><Name>End_date</Name><Value>{self.config.end_date}</Value></Processing_Parameter>
-    </Processing_Parameters>
-</Processor_Config>'''
+            # 1. 使用标准 XML 生成器生成工单
+            from data_adapter.xml_generator import generate_star_cross_match_xml
+            xml_content = generate_star_cross_match_xml(
+                sat_id=self.config.sat_id,
+                aux_sat=self.config.aux_data_type,
+                start_date=self.config.start_date,
+                end_date=self.config.end_date,
+                input_dir=local_input_dir,
+                aux_input_dir=self.config.aux_input_dir or local_input_dir,
+                output_dir=self.config.output_dir or "./output"
+            )
             
             out_dir = Path(self.config.output_dir or "./output")
             out_dir.mkdir(parents=True, exist_ok=True)
             xml_file = out_dir / f"job_match_{self.config.sat_id}_{self.config.start_date}_{int(time.time())}.xml"
-            xml_file.write_text(job_xml, encoding="utf-8")
+            xml_file.write_text(xml_content, encoding="utf-8")
             
             # 2. 构建配置对象 (与 main.py 完全相同的调用方式)
             ipf_config = MyIPFConfig(str(xml_file))
@@ -110,30 +97,6 @@ class StarCrossMatchOperator(BaseOperator):
         finally:
             if str(src_dir) in sys.path:
                 sys.path.remove(str(src_dir))
-    
-        from data_adapter.xml_generator import generate_star_cross_match_xml
-        
-        
-        # 1. 生成 XML 工单
-        xml_content = generate_star_cross_match_xml(
-            sat_id=self.config.sat_id,
-            aux_sat=self.config.aux_data_type,
-            start_date=self.config.start_date,
-            end_date=self.config.end_date,
-            input_dir=self.config.input_dir,
-            output_dir=self.config.output_dir or "./output"
-        )
-        
-        # 2. 上传工单并执行
-        remote_job_path = f"/tmp/job_{self.config.sat_id}_{self.config.start_date}.xml"
-        result = executor.execute_xml_job(
-            ssh_client=ssh_client,
-            xml_content=xml_content,
-            module_name="gl_ssh_cross_match_pro",
-            remote_workdir="/home/leehir/GPF/01-星星交叉法v2.0/cvs_glsy_alt_gdr_aux_sat_match"
-        )
-        
-        return result
     
     def load_output(self, output_dir: str) -> Dict[str, np.ndarray]:
         """加载匹配结果 NPZ 文件"""

@@ -9,6 +9,19 @@ gpf_paths:
   tide_ext: "GPF/04-验潮站外推 v1.0/CVS_GLSY_ALT_GDR_AUX_YCZ_CAL"
   target: "GPF"
 
+data:
+  base_dir: "D:/BaiduSyncdisk/project/202610/data/satelite"
+  star_cross: "D:/BaiduSyncdisk/project/202610/data/satelite"
+  self_cross: "D:/BaiduSyncdisk/project/202610/data/satelite"
+  sig0_cross: "D:/BaiduSyncdisk/project/202610/data/satelite"
+  ycz_match: "D:/BaiduSyncdisk/project/202610/data"
+  tide_ext: "D:/BaiduSyncdisk/project/202610/data"
+  # 验潮站相关子路径
+  hy2bgdr: "D:/BaiduSyncdisk/project/202610/data/HY-2BGDR"
+  wstg: "D:/BaiduSyncdisk/project/202610/data/WSTG"
+  mss: "D:/BaiduSyncdisk/project/202610/data/DTU18MSS_1min.nc"
+  fes2014: "D:/BaiduSyncdisk/project/202610/data/FES2014"
+
 # Operator Settings
 operators:
   star_cross:
